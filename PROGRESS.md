@@ -13,4 +13,4 @@ requirement.txt文件里可以写单行注释，安装依赖会忽略#后的内�
 
 配置项目环境可以通过右下角版本号点击，然后顶部出现选择环境，或者是命令面板搜索Python: Select Interpreter来选择。
 
-下载了适用于Windows的git环境。
+下载了适用于Windows的git环境，并安装了桌面版的git用于更方便的同步记录代码。

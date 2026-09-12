@@ -7,6 +7,9 @@ import fastf1
 # Path 专门用来处理文件夹、文件路径
 from pathlib import Path
 
+# 导入 matplotlib 库，专门用来画图
+import matplotlib.pyplot as plt
+
 """
 ============================================================
 第 1 部分：确定数据缓存（cache）放在哪里
@@ -153,3 +156,38 @@ session.laps
 “把刚才加载出来的圈速数据，先给我看看前五条。”
 """
 # print(session.laps.head())
+
+"""
+get_car_data()：从这一圈里取出详细的遥测表格
+跟之前 session.laps 那张"每圈一行"的表不一样，这张表是"这一圈里每个采样时刻一行"（采样率很高，一圈能有几百行）
+列包括 Speed（速度）、Throttle（油门开度0-100）、Brake（刹车，开/关）、RPM、nGear（挡位）等。
+
+add_distance()：默认这张表只有"时间"没有"跑了多少米"，但两个车手圈速不同，直接按时间对比曲线会错位
+（比如1分47秒时A车手可能在弯1，B车手可能已经到弯2了）。
+add_distance() 会根据速度积分算出每个采样点对应"从这一圈起点跑了多少米"，加一列叫 Distance。
+之后画图要用这个距离做横轴，而不是时间，这样两条曲线才是"同一个弯"对比同一个弯，公平比较
+可以不要这个输出试试，看看区别加深理解。
+"""
+tel_a = A_fastest.get_car_data().add_distance()
+tel_b = B_fastest.get_car_data().add_distance()
+
+# 画图，横轴是距离，纵轴是当前速度，标签是车手字母代码。
+plt.plot(
+    tel_a['Distance'],
+    tel_a['Speed'],
+    label= {A_fastest['Driver']}
+    )
+plt.plot(
+    tel_b['Distance'],
+    tel_b['Speed'],
+    label= {B_fastest['Driver']}
+    )
+
+# 设置图的标题、横轴、纵轴、图例。
+plt.xlabel('Distance (m)')
+plt.ylabel('Speed (km/h)')
+plt.title('2024 Monaco GP Q - Speed Comparison')
+plt.legend()
+
+# 显示图。
+plt.show()
