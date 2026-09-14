@@ -2,6 +2,9 @@
 # FastF1 是专门用来获取和分析 F1 比赛数据的库
 import fastf1
 
+# 导入 fastf1.plotting 模块，专门用来获取车手颜色
+import fastf1.plotting 
+
 
 # 从 Python 自带的 pathlib 模块中导入 Path
 # Path 专门用来处理文件夹、文件路径
@@ -9,6 +12,10 @@ from pathlib import Path
 
 # 导入 matplotlib 库，专门用来画图
 import matplotlib.pyplot as plt
+
+# 导入 plotly 库，专门用来画交互式图表
+import plotly.graph_objects as go
+
 
 """
 ============================================================
@@ -171,6 +178,8 @@ add_distance() 会根据速度积分算出每个采样点对应"从这一圈起�
 tel_a = A_fastest.get_car_data().add_distance()
 tel_b = B_fastest.get_car_data().add_distance()
 
+
+"""
 # 画图，横轴是距离，纵轴是当前速度，标签是车手字母代码。
 plt.plot(
     tel_a['Distance'],
@@ -191,3 +200,64 @@ plt.legend()
 
 # 显示图。
 plt.show()
+"""
+
+"""
+拿到两个车手对应的官方配色
+fastf1.plotting.get_driver_color() 需要两个参数：
+   1）车手的三字母代码，比如 'LEC'、'VER'（也可以用车号，看你装的 fastf1 版本）
+   2）session 对象，因为同一个车手在不同年份/车队颜色可能不一样，所以要告诉函数"是哪一场比赛"
+"""
+color_a = fastf1.plotting.get_driver_color(A_fastest['Driver'], session)
+color_b = fastf1.plotting.get_driver_color(B_fastest['Driver'], session)
+
+"""
+创建一个空白的 Plotly 图形对象
+这个 fig 就相当于 matplotlib 里那块"画布"
+之后所有的线、标题、坐标轴都往这个 fig 上面加
+"""
+fig = go.Figure()
+
+"""
+往 fig 里加两条线（每个车手一条）
+go.Scatter() 用来画"散点图/折线图"，这里我们用它画速度曲线
+参数说明：
+    x=...       横轴数据，用刚才算好的距离（Distance）
+    y=...       纵轴数据，用速度（Speed）
+    mode='lines'  表示画成"线"，而不是一个个散点
+    name=...    这条线在图例（legend）里显示的名字，用车手缩写
+    line=dict(color=...)  给这条线指定颜色，用第 1 步拿到的官方配色
+"""
+fig.add_trace(go.Scatter(
+    x=tel_a['Distance'],
+    y=tel_a['Speed'],
+    mode='lines',
+    name=A_fastest['Driver'],
+    line=dict(color=color_a)
+))
+fig.add_trace(go.Scatter(
+    x=tel_b['Distance'],
+    y=tel_b['Speed'],
+    mode='lines',
+    name=B_fastest['Driver'],
+    line=dict(color=color_b)
+))
+
+"""
+设置标题、坐标轴名字、鼠标悬停效果
+fig.update_layout() 是用来统一调整这张图"外观"的函数
+title：整张图的标题
+xaxis_title / yaxis_title：横轴、纵轴的名字（对应原来的 plt.xlabel / plt.ylabel）
+hovermode='x unified'：
+  鼠标移到图上时，会把"同一个横坐标位置"上所有线的数值
+  一起显示在一个提示框里，方便同时对比两位车手在同一位置的速度
+"""
+fig.update_layout(
+    title='2024 Monaco GP Q - Speed Comparison',
+    xaxis_title='Distance (m)',
+    yaxis_title='Speed (km/h)',
+    hovermode='x unified'
+)
+
+# 显示图
+fig.show()
