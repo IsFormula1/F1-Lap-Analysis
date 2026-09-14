@@ -19,10 +19,14 @@
 
 ## 2026-09-14
 
-1. 学会了用：
+1. 用：
     git config --global core.editor "notepad.exe"
     git rebase -i --root
     修改pick为reword
 这些步骤来修改之前已经commit但没有push的本地仓库。 
 
 2. plotly 库可以用于生成交互度更高的动态图片。
+
+3. python不像C++一样区别单双引号，但是切记字符串包裹时用不一样的。
+
+4. go.table和dict配合绘制表格的过程。
