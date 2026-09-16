@@ -10,18 +10,22 @@ from pathlib import Path
 
 from plotting import build_telemetry_data_chart
 
-
+# 绝对路径
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# 把这个地址路径创建为一个变量
 CACHE_DIR = PROJECT_ROOT / 'cache'
 
+# 有则不报错，没有则创建
 CACHE_DIR.mkdir(exist_ok=True)
 
+# 启用缓存，以后相同数据直接读取。不同数据也存在其中。
 fastf1.Cache.enable_cache(str(CACHE_DIR))
 
-
+# 获取2024年摩纳哥大奖赛排位赛数据
 session = fastf1.get_session(2024, 'Monaco', 'Q')
 
+# 加载数据
 session.load()
 print()
 

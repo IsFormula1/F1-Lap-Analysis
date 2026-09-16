@@ -60,7 +60,7 @@ def build_telemetry_data_chart(session, driver_codes):
     # 如果show_table为True，则画表格
     if show_table:  
         """
-        rows=2, cols=1：整体分成上下两行，每行一列（把整张图想象成一个大表格，一个图占一格，也就是上下堆叠）
+        rows = 2, cols = 1：整体分成上下两行，每行一列（把整张图想象成一个大表格，一个图占一格，也就是上下堆叠）
         row_heights：控制两行的高度比例，[0.7, 0.3] 表示上面那行占 70% 高度，下面占 30%
         specs：逐行逐列声明每个格子的类型
              第一行第一列 → {"type": "xy"}      普通折线图
@@ -68,17 +68,18 @@ def build_telemetry_data_chart(session, driver_codes):
         subplot_titles：给每个子图单独加一个小标题
         """
         fig = make_subplots(    # 创建一个2行1列的子图，也就是上下两部分
-            rows=2, cols=1,
-            row_heights=[0.6, 0.4],
-            specs=[[{"type": "xy"}], [{"type": "table"}]],
-            subplot_titles=("Speed Comparison", "Sector Time Comparison")
+            rows = 2, cols = 1,
+            row_heights = [0.6, 0.4],
+            vertical_spacing=0.20,  # 增大上下子图间距
+            specs = [[{"type": "xy"}], [{"type": "table"}]],
+            subplot_titles = ("Speed Comparison", "Sector Time Comparison")
         )
     # 车手数量不是2个时，只画一行折线图，没有表格
     else:
         fig = make_subplots(    # 创建一个1行1列的子图，也就是整张图是一个子图
-            rows=1, cols=1,
-            specs=[[{"type": "xy"}]],
-            subplot_titles=("Speed Comparison",)
+            rows = 1, cols = 1,
+            specs = [[{"type": "xy"}]],
+            subplot_titles = ("Speed Comparison",)
         )
 
 
@@ -88,21 +89,100 @@ def build_telemetry_data_chart(session, driver_codes):
     for d in driver_data:
         # 添加一条曲线
         fig.add_trace(go.Scatter(   # go.Scatter() 用来画"散点图/折线图"，这里我们用它画速度曲线
-            x=d['tel']['Distance'], # 横轴是距离
-            y=d['tel']['Speed'],    # 纵轴是速度
-            mode='lines',
-            name=d['code'],
-            line=dict(color=d['color']),    # 给曲线指定颜色，用第 1 步拿到的官方配色
+            x = d['tel']['Distance'], # 横轴是距离
+            y = d['tel']['Speed'],    # 纵轴是速度
+            mode = 'lines',
+            name = d['code'],
+            line = dict(color = d['color']),    # 给曲线指定颜色，用第 1 步拿到的官方配色
             # hovertemplate：手动规定悬浮框里显示的格式，不再让 plotly 自己判断
             # %{y:.0f} 表示"y值，保留0位小数"（速度取整数就够了）
             # <extra></extra> 是用来删掉 plotly 默认多显示的那个"小方框"（本来会重复显示一次车手名字）
-            hovertemplate=(
+            hovertemplate = (
                 f"{d['code']}: "
-                'X=%{x:.3f} m, '
-                'Y=%{y:.0f} km/h'
+                'X = %{x:.3f} m, '
+                'Y = %{y:.0f} km/h'
                 '<extra></extra>'
             )
-        ), row=1, col=1) # 把曲线加到整张图的第一行第一列（整体的话就只有这一张图，上下两部分的话也就是上半部分）
+        ), row = 1, col = 1) # 把曲线加到整张图的第一行第一列（整体的话就只有这一张图，上下两部分的话也就是上半部分）
+
+
+
+
+# --- 第三步补充：在速度图上用竖虚线标出每个弯道的位置 ---
+    """
+    session.get_circuit_info() 返回这条赛道的"赛道信息"对象，
+    这个信息只跟赛道有关，跟车手是谁无关（所以不需要放进上面那个车手循环里）。
+
+    circuit_info.corners 是一张表（DataFrame），每一行代表赛道上的一个弯，
+    要用到的三列是：
+        Distance —— 这个弯距离起跑线多少米，正好能对上速度图横轴的单位
+        Number   —— 弯道编号（1、2、3...）
+        Letter   —— 有些弯会拆成 7A、7B 这种，这一列就是那个字母；
+                    大部分弯这一列是空字符串，拼上去也不影响
+    """
+    circuit_info = session.get_circuit_info()
+    corners = circuit_info.corners
+
+    """
+    先给 y 轴（速度）上方留一块空白，专门用来放弯道编号。
+    max(...) 里面是一个"生成器表达式，作用是：遍历每个车手的遥测数据，各取出速度的最大值，再从这些最大值里取最大的那个。
+    等价于下面这样写：
+        speeds = []
+        for d in driver_data:
+            speeds.append(d['tel']['Speed'].max())
+        max_speed = max(speeds)
+    乘以 1.12 就是"在最高速度基础上再往上留 12% 的空间"，
+    这块空白区域没有曲线，正好用来放编号，不会跟数据打架。
+    
+    max_speed = max(d['tel']['Speed'].max() for d in driver_data)
+
+    # 设置y轴范围，留出空白区域用来放弯道编号
+    fig.update_yaxes(range = [0, max_speed * 1.12], row = 1, col = 1)
+    """
+
+    """
+    corners.iterrows() 是 pandas 的方法，作用是"一行一行地遍历这张表"。
+    它每次返回两个东西：(这一行的索引, 这一行的数据)
+    我们只关心"这一行的数据"，不关心索引，
+    所以第一个变量写成 _ （下划线），这是 Python 的惯例，表示"这个值我拿到了但用不上"
+    """
+    for _, corner in corners.iterrows():
+
+        # 把编号和字母拼成显示用的文本，例如 '1'、'7A'
+        corner_label = f"T{int(corner['Number'])}{corner['Letter']}"
+
+        """
+        fig.add_vline()：在图上画一条"垂直的参考线"（v = vertical）
+        它跟 add_trace 不一样——add_trace 是加一条"数据曲线"，
+        add_vline 加的是一条"辅助线/标注线"，不会出现在图例里，也不参与 hover 数值显示。
+
+        参数说明：
+            x=...               这条竖线画在横轴的哪个位置，用这个弯的 Distance
+            line_width=1        线宽
+            line_dash           线类型
+            line_color'         颜色
+            layer               层级
+            annotation_text     在这条线旁边写的文字，这里写弯道编号
+            annotation_position 文字放的位置
+            row = 1, col = 1    关键！告诉 plotly 这条线画在"第一行第一列"那个子图上。
+                                因为用了 make_subplots，不指定的话 plotly 不知道该画哪一格
+        """
+        fig.add_vline(
+            x = corner['Distance'],
+
+            # 线样式
+            line_width = 1,
+            line_dash = 'dot',
+            line_color = 'gray',
+            layer = 'below',
+
+            # 文字样式
+            annotation_text = corner_label,
+            annotation_position = 'bottom',
+            annotation_yshift = 12,
+            annotation_font_size = 10,
+            row = 1, col = 1,
+        )
 
 
 
@@ -128,15 +208,15 @@ def build_telemetry_data_chart(session, driver_codes):
 
         fig.add_trace(go.Table(
             # header 是表头那一行
-            header=dict(
-                values=['Sector', f'{code_a} (s)', f'{code_b} (s)', 'Delta (s)'],
-                fill_color='lightgrey',
-                align='center',
-                height=50
+            header = dict(
+                values = ['Sector', f'{code_a} (s)', f'{code_b} (s)', 'Delta (s)'],
+                fill_color = 'lightgrey',
+                height = 30,
+                align = 'center'
             ),
             # cells 是表格主体内容，每一个 values 里的列表对应一"列"
-            cells=dict(
-                values=[
+            cells = dict(
+                values = [
                     ['Sector 1', 'Sector 2', 'Sector 3'],    # 第一列
                     [lap_a['Sector1Time'].total_seconds(),
                      lap_a['Sector2Time'].total_seconds(),
@@ -146,10 +226,10 @@ def build_telemetry_data_chart(session, driver_codes):
                      lap_b['Sector3Time'].total_seconds()],    # 第三列
                     [f"{d:+.3f}" for d in sector_deltas]    # 第四列，每个delta前面带上正负号
                 ],
-                align='center',
-                height=50  # 表格单元格高度
+                align = 'center', # 表格内容居中对齐
+                height = 30  # 表格单元格高度
             )
-        ), row=2, col=1) # 把表格加到第二行第一列（有表格的话一定在下半）
+        ), row = 2, col = 1) # 把表格加到第二行第一列（有表格的话一定在下半）
 
 
 
@@ -160,13 +240,21 @@ def build_telemetry_data_chart(session, driver_codes):
     所以横纵轴标题不能直接写在 fig.update_layout(xaxis_title=...) 里了（那样只对没有 subplot 的图有效），
     要换成 update_xaxes / update_yaxes，并指定是哪个格子：
     """
-    fig.update_xaxes(title_text='Distance (m)', row=1, col=1)
-    fig.update_yaxes(title_text='Speed (km/h)', row=1, col=1)
+    fig.update_xaxes(
+        title_text = 'Distance (m)',
+        showgrid=False,                 # 关闭竖向网格，避免和弯道线重复
+        row = 1, col = 1
+    )
+
+    fig.update_yaxes(
+        title_text = 'Speed (km/h)',
+        row = 1, col = 1
+    )
 
     fig.update_layout(
-        title=f"{session.event['EventName']} {session.name} - Speed Comparison",    # 根据传进来的实参来确定标题
-        hovermode='x unified',
-        height=1200 if show_table else 800  # 三元运算符表达式，如果show_table为True，则高度为1200，否则为800
+        title = f"{session.event['EventName']} {session.name} - Speed Comparison",    # 根据传进来的实参来确定标题
+        hovermode = 'x unified',
+        height = 1200 if show_table else 800,  # 三元运算符表达式，如果show_table为True，则高度为1200，否则为800
     )
 
     return fig
@@ -225,9 +313,9 @@ hovermode='x unified'：
 
 fig.update_layout(
     title='2024 Monaco GP Q - Speed Comparison',
-    xaxis_title='Distance (m)',
-    yaxis_title='Speed (km/h)',
-    hovermode='x unified'
+    xaxis_title = 'Distance (m)',
+    yaxis_title = 'Speed (km/h)',
+    hovermode = 'x unified'
 )
 
 # 显示图

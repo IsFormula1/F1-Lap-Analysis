@@ -37,3 +37,32 @@
     这个文件夹可以放心删除，删了也不影响代码运行，Python 下次 import 的时候会自动重新生成。
     它本质上是一种"编译产物/缓存"，跟源代码没关系。
     不应该提交到 Git 仓库里。
+
+
+
+
+## 2026-09-16
+
+1. Plotly 中以下两种文字都属于 annotation：
+    subplot_titles 创建的子图标题
+    add_vline(annotation_text=...) 创建的弯道编号
+因此，不带筛选条件的：fig.update_annotations(yshift=10)意思不是“移动子图标题”，而是把整张图中所有 annotation 都向上移动10像素。
+
+2. update_*()是Plotly的“批量修改方法”：
+    fig.update_layout(...)       # 修改整体布局
+    fig.update_xaxes(...)        # 修改横坐标轴
+    fig.update_yaxes(...)        # 修改纵坐标轴
+    fig.update_traces(...)       # 修改数据曲线/表格
+    fig.update_annotations(...)  # 修改文字标注
+不指定范围时，通常会修改该类型的所有对象。可以用 selector、row、col 缩小范围。
+例如只移动指定标题：
+fig.update_annotations(
+    selector=dict(text='Speed Comparison'), # 找到文字内容是Speed Comparison的那个annotation，单独修改他的纵坐标。
+    yshift=10,
+)
+或者如果不是在fig.update_*前面，那就只对该annotation起效，
+比如：
+fig.add_vline(
+    annotation_yshift=12,
+)
+就只对创建的这条线生效。
