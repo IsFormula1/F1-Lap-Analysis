@@ -12,6 +12,9 @@ import plotly.graph_objects as go
 # 导入 plotly.subplots 模块，专门用来创建子图，用来合并图片。
 from plotly.subplots import make_subplots
 
+# 导入 numpy 库，专门用来处理数学运算
+import numpy as np
+
 # 形参用车手缩写的原因是：fastf1.plotting.get_driver_color('16', session)：
 # 官方文档写得很清楚，这个函数的 identifier 参数要求是"车手缩写，或者车手姓名里能辨认出来的一部分"，不支持车号。
 # 如果传车号进去，大概率会报错或者匹配不到颜色。
@@ -33,7 +36,7 @@ def build_telemetry_data_chart(session, driver_codes):
         显示/存文件这些决定权留给调用方，函数只负责"画好图"。
     """
 
-# --- 第一步：把每个车手的最快圈 + 遥测数据 + 官方配色，先统一收集好 ---
+  # --- 第一步：把每个车手的最快圈 + 遥测数据 + 官方配色，先统一收集好 ---
     # 用一个列表装若干个"小字典"，每个字典对应一个车手的全部信息
     # 这样后面无论循环几次（2个车手还是5个车手），逻辑都一样，不用写死
     driver_data = []
@@ -53,7 +56,7 @@ def build_telemetry_data_chart(session, driver_codes):
 
 
 
-# --- 第二步：根据车手数量，决定要不要留出表格的位置 ---
+  # --- 第二步：根据车手数量，决定要不要留出表格的位置 ---
     # len()函数返回列表中元素的个数
     show_table = (len(driver_codes) == 2)   # 如果车手数量是2个，则为True，否则为False
     
@@ -85,7 +88,7 @@ def build_telemetry_data_chart(session, driver_codes):
 
 
 
-# --- 第三步：画折线图，循环处理，支持任意数量车手 ---
+  # --- 第三步：画折线图，循环处理，支持任意数量车手 ---
     for d in driver_data:
         # 添加一条曲线
         fig.add_trace(go.Scatter(   # go.Scatter() 用来画"散点图/折线图"，这里我们用它画速度曲线
@@ -108,7 +111,7 @@ def build_telemetry_data_chart(session, driver_codes):
 
 
 
-# --- 第三步补充：在速度图上用竖虚线标出每个弯道的位置 ---
+  # --- 第三步补充：在速度图上用竖虚线标出每个弯道的位置 ---
     """
     session.get_circuit_info() 返回这条赛道的"赛道信息"对象，
     这个信息只跟赛道有关，跟车手是谁无关（所以不需要放进上面那个车手循环里）。
@@ -187,7 +190,7 @@ def build_telemetry_data_chart(session, driver_codes):
 
 
 
-# --- 第四步：只有正好2个车手时，才计算 sector delta 并画表格 ---
+  # --- 第四步：只有正好2个车手时，才计算 sector delta 并画表格 ---
     """
     计算每个sector的时间差值，该值本身就在lap数据中。
     A_fastest 和 B_fastest 这两个 Lap 对象，本身就带有
@@ -234,7 +237,7 @@ def build_telemetry_data_chart(session, driver_codes):
 
 
 
-# --- 第五步：坐标轴标题、整体布局 ---
+  # --- 第五步：坐标轴标题、整体布局 ---
     """
     因为这张图现在可能有多组坐标轴（虽然这里只有一组，但用了 make_subplots 之后 Plotly 统一按"多子图"的逻辑处理），
     所以横纵轴标题不能直接写在 fig.update_layout(xaxis_title=...) 里了（那样只对没有 subplot 的图有效），
@@ -321,3 +324,179 @@ fig.update_layout(
 # 显示图
 fig.show()
 """
+
+
+
+# 把 (N, 2) 的坐标数组绕原点旋转 angle_deg 度，fastf1 官方文档就是这么做的。画出来的赛道图更符合常识。
+def rotate_points(xy, angle_deg):   # xy是一组二维坐标，angle_deg是要旋转多少度。表示要把这一组二维坐标整体旋转一个角度。
+    
+    # 把角度换成弧度
+    rad = np.deg2rad(angle_deg)
+
+    # 构造旋转矩阵，因为是坐标右乘旋转矩阵，所以两个sin的位置是反的。
+    rot = np.array([[np.cos(rad), np.sin(rad)],
+                    [-np.sin(rad), np.cos(rad)]])
+    return xy @ rot
+
+
+
+
+def build_track_map_chart(session, driver_codes):
+    """
+    画赛道图，三个计时段分别用速度更快的车手的颜色。
+    只支持两个车手对比速度。
+    """
+    if len(driver_codes) != 2:
+        raise ValueError("只支持两个车手对比速度。") 
+
+
+    # 解包赋值。因为上面已经确认 driver_codes 正好有 2 个元素，这一行等价于 code_a = driver_codes[0] 加上 code_b = driver_codes[1]，写成一行更简洁。
+    code_a, code_b = driver_codes
+
+
+
+
+  # --- 第一步：两个人的最快圈 + 官方配色 ---
+    lap_a = session.laps.pick_drivers(code_a).pick_fastest()
+    lap_b = session.laps.pick_drivers(code_b).pick_fastest()
+    color_a = fastf1.plotting.get_driver_color(code_a,session)
+    color_b = fastf1.plotting.get_driver_color(code_b,session)
+
+
+
+
+  # --- 第二步：拿一条"参考圈"的坐标，用来画赛道形状 ---
+    # 赛道形状对两个人是一样的，所以用哪个人的圈都行，这里用 A
+    # get_telemetry() = 车载数据（Speed 等）+ 定位数据（X、Y）合并后的表，并且自带 Distance 列
+    # get_telemetry()相当于自car = lap.get_car_data() + pos = lap.get_pos_data() 然后把两张表合并在一起，顺手再把distance加上，再加上各种统计值。
+    # get_pos_data() 是GPS 定位数据流，get_car_data() 是车载数据流。
+    # 只要车载数据，用 get_car_data()；只要位置，用 get_pos_data()；两个都要（赛道图这种既要 X/Y 又要按 Distance 切段的场景）才用 get_telemetry()。
+    tel = lap_a.get_telemetry()
+
+
+
+
+  # --- 第三步：找出每个计时段的边界在赛道上是第几米 ---
+    """
+    lap_a['Sector1SessionTime']：第 1 计时段结束那一刻的"会话时间"
+    lap_a['Sector2SessionTime']：第 2 计时段结束那一刻的"会话时间"
+    遥测表 tel 里也有 SessionTime 列，是同一个时间轴，可以直接比较。
+    做法：筛出 SessionTime 不超过该时刻的所有行，取最后一行的 Distance，就是边界位置。
+    """
+    # 在 tel 里面，找到所有 SessionTime 小于等于 S1 结束时间的行，然后只取这些行的 Distance 列，然后用.iloc[-1]拿该组的最后一个数据，就是这个sector的距离。
+    s1_end = tel.loc[tel['SessionTime'] <= lap_a['Sector1SessionTime'],'Distance'].iloc[-1]
+    s2_end = tel.loc[tel['SessionTime'] <= lap_a['Sector2SessionTime'],'Distance'].iloc[-1]
+
+    # 从distance列拿最后一个数据，也就是重点的距离。
+    total  = tel['Distance'].iloc[-1]
+    # 这两个用哪个都是ok的，一个是直接取最后一个监测点，一个是找最后的时间的监测点。
+    # s3_end = tel.loc[tel['SessionTime'] <= lap_a['Sector3SessionTime'],'Distance'].iloc[-1]
+    
+    # 记录三个计时段各自覆盖的距离范围 (起点, 终点)
+    sector_bounds = [(0, s1_end), (s1_end, s2_end), (s2_end,total)]
+
+
+
+
+  # --- 第四步：旋转坐标，让赛道图方向符合常识 ---
+    circuit_info = session.get_circuit_info()
+    xy = np.column_stack([tel['X'], tel['Y']])          # np.column_stack是一个方法，用来将数据拼成 (N行, 2列) 的数组
+    xy = rotate_points(xy, circuit_info.rotation)        # rotation 是官方给的角度（度）
+    tel = tel.assign(Xr = xy[:, 0], Yr = xy[:, 1])       # .assign方法用来添加列。xy[:, 0]代表所有行，第0列。加两列旋转后的 x 和 y 坐标，不动原来的 X、Y。
+    tel = tel.dropna(subset = ['Xr', 'Yr'])   # dropna()方法用来删除空值，合并遥测时边缘行可能是 NaN，plotly 遇到 NaN 会断线，先丢掉
+
+
+
+
+  # --- 第五步：每个计时段一段线，谁快用谁的颜色 ---
+    fig = go.Figure()
+
+    # enumerate(..., start=1) 让 i 从 1 开始，正好对上 Sector1Time / Sector2Time / Sector3Time
+    # enumerate是python自带函数，作用是遍历一个列表的时候，同时给每个元素一个编号。同时i从编号开始。结果例如(1, (0, 1800))
+    for i, (start,end) in enumerate(sector_bounds, start = 1):
+        sec_name = f'Sector{i}Time'
+        t_a = lap_a[sec_name].total_seconds()
+        t_b = lap_b[sec_name].total_seconds()
+        delta = t_a - t_b
+
+        if t_a < t_b:
+            winner, color = code_a, color_a
+        else:
+            winner, color = code_b, color_b
+
+        # 用距离范围把这一段的坐标切出来，也就是每次循环，seg里面就是这一个sector的距离的所有坐标。
+        # 两端都用 <= / >= 闭区间，相邻两段会共用边界那一个点，画出来才不会断开
+        mask = (tel['Distance'] >= start) & (tel['Distance'] <= end)
+        seg = tel[mask]
+
+        # 为了防止断线需要做改动：
+        # 第 3 段的终点和整圈起点其实是同一个位置（起终点线），但采样不会恰好落在同一点，
+        # 所以手动把整圈第一个点接到第 3 段末尾，让赛道闭合
+        # .tolist()是一个Pandas方法，用于把Series转换成列表。列表才能append，append是在列表尾部添加一个元素
+        xs = seg['Xr'].tolist()
+        ys = seg['Yr'].tolist()
+        if i == 3:
+            xs.append(tel['Xr'].iloc[0])
+            ys.append(tel['Yr'].iloc[0])
+
+        # 画线
+        fig.add_trace(go.Scatter(
+            x = xs,
+            y = ys,
+            mode = 'lines',
+            line = dict(color = color, width = 8),
+            name = f"Sector{i}: {winner} faster ({delta:+.3f}s)",
+            hovertemplate = (
+                f"Sector {i}<br>"
+                f"{code_a}: {t_a:.3f}s<br>"
+                f"{code_b}: {t_b:.3f}s"
+                "<extra></extra>"
+            )
+        ))
+
+        # 标每段编号，可视不同赛道图的情况修改位置。
+        mid = seg.iloc[len(seg) // 2]
+        fig.add_annotation(
+            x = mid['Xr'],
+            y = mid['Yr'],
+            text = f"<b>S{i}</b>",
+            showarrow = False,
+            font = dict(size = 18, color = 'gray'),
+            yshift = 25
+        )
+
+    # 起终点线、S1/S2 交界、S2/S3 交界，各打一个点
+    boundary_dists = [0, s1_end, s2_end]
+    for dist in boundary_dists:
+        # 找 Distance 最接近 dist 的那一行，并拿出来这一行的所有数据
+        row = tel.iloc[(tel['Distance'] - dist).abs().argmin()]
+        fig.add_trace(go.Scatter(
+            x = [row['Xr']],
+            y = [row['Yr']],
+            mode = 'markers',
+            marker = dict(
+                size = 10,
+                color = 'white',
+                line = dict(
+                    color = 'black',
+                    width = 2)),
+            showlegend = False,
+            hoverinfo = 'skip'
+        ))
+
+
+
+  # --- 第六步：布局 ---
+    fig.update_layout(
+        title = f"{session.event['EventName']} {session.name} - Track Map ({code_a} vs {code_b})",
+
+        # 赛道图不需要x轴
+        xaxis = dict(visible = False),
+
+        # 也不显示y轴。让y轴的缩放比例绑定在x轴上，是让x、y等比例，否则赛道会被拉扁。x和y的单位长度按照 1:1 的比例显示。
+        yaxis = dict(visible =False, scaleanchor = 'x', scaleratio = 1),
+        plot_bgcolor = 'white',
+        height = 800,
+    )
+
+    return fig

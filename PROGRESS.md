@@ -65,4 +65,17 @@ fig.update_annotations(
 fig.add_vline(
     annotation_yshift=12,
 )
-就只对创建的这条线生效。
+就只对增加的那一列起效。
+
+
+
+
+## 2026-09-21
+
+1. 旋转矩阵的使用，注意numpy 的三角函数（np.cos、np.sin）只接受弧度，不接受角度，所以要先转化角度为弧度。
+
+
+
+
+## 2026-09-24
+1. zip() 的作用就是：把两个列表按位置配对。结果和之前的enumerate()很像。

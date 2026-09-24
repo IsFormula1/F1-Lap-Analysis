@@ -8,7 +8,7 @@ import fastf1
 # Path 专门用来处理文件夹、文件路径
 from pathlib import Path
 
-from plotting import build_telemetry_data_chart
+from plotting import build_telemetry_data_chart, build_track_map_chart
 
 # 绝对路径
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -23,7 +23,7 @@ CACHE_DIR.mkdir(exist_ok=True)
 fastf1.Cache.enable_cache(str(CACHE_DIR))
 
 # 获取2024年摩纳哥大奖赛排位赛数据
-session = fastf1.get_session(2024, 'Monaco', 'Q')
+session = fastf1.get_session(2024, 'China', 'Q')
 
 # 加载数据
 session.load()
@@ -56,5 +56,8 @@ print(f"{A_fastest['Driver']} - {B_fastest['Driver']} = {delta.total_seconds()}"
 
 # print(session.laps.head())
 
-fig = build_telemetry_data_chart(session, ['LEC', 'VER'])
-fig.show()
+fig1 = build_telemetry_data_chart(session, ['LEC', 'VER'])
+fig1.show()
+
+fig2 = build_track_map_chart(session, ['LEC', 'VER'])
+fig2.show()
